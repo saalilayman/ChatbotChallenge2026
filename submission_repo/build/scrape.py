@@ -1,12 +1,12 @@
 """Scraper. STUB. Workshop 1 block 4.
 
-Crawl both websites, extract the readable text, and collect image
-records in the same pass. Run this file directly to (re)build
+crawling both websites, extracting the readable text, and collecting image
+records in the same pass. running this file directly to (re)build
 data/pages.json and data/images.json.
-
-Check for /sitemap.xml before writing a crawler. If it exists it lists
-every page and you can skip the crawl entirely.
 """
+
+# This is a scraper that combines my previous exploration work with Punk's site-based approach.
+
 import json
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -16,8 +16,7 @@ from bs4 import BeautifulSoup
 
 SITES = [
     # TODO: the two Inno Wing sites you were given
-    "https://innowings.engg.hku.hk/innowing1/",
-    "https://innowings.engg.hku.hk/innowing2/",
+    "https://innowings.engg.hku.hk/",
     "https://innoacademy.engg.hku.hk/"
 ]
 
@@ -26,68 +25,70 @@ HEADERS = {
 }
 
 
-def crawl(start_url: str, max_pages: int = 500) -> list[dict]:
-    """Return every extracted page dictionary on the same site as start_url."""
-    seen = set()
-    queue = [start_url]
-    pages = []  # Stores extracted page dicts
-
+def crawl(start_url: str, max_pages: int = 710) -> list[dict]:
+    # grabbing the domain and setting up sitemap processing
     domain = urlparse(start_url).netloc
-    ignored_exts = (
-        ".pdf", ".png", ".jpg", ".jpeg", ".gif",
-        ".zip", ".mp4", ".css", ".js",
-    )
+    sitemap_url = urljoin(start_url, "/wp-sitemap.xml")
+    sitemaps_to_process = [sitemap_url]
+    processed_sitemaps = set()
+    page_urls = []
+    pages = []  # storing extracted page dicts
 
-    while queue and len(pages) < max_pages:
-        url = queue.pop(0)
-        clean_url = url.split("#")[0].rstrip("/")
+    print(f"fetching sitemap: {sitemap_url}")
 
-        if clean_url in seen:
+    # looping through sitemaps to find all hidden urls first
+    while sitemaps_to_process and len(page_urls) < max_pages:
+        current_sitemap = sitemaps_to_process.pop(0)
+        if current_sitemap in processed_sitemaps:
             continue
-        seen.add(clean_url)
+        processed_sitemaps.add(current_sitemap)
 
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=15)
-            # Guard: Must be 200 OK and HTML content
-            if (
-                resp.status_code != 200
-                or "text/html" not in resp.headers.get("Content-Type", "")
-            ):
-                if resp.status_code != 200:
-                    print(f"  [DEBUG] Status code {resp.status_code} on {url}")
+            # downloading the xml map
+            res = requests.get(current_sitemap, headers=HEADERS, timeout=15)
+            if res.status_code != 200:
                 continue
-            html = resp.text
-        except Exception as e:
-            print(f"  [DEBUG] Request failed on {url}: {e}")
+            
+            # parsing xml content
+            soup = BeautifulSoup(res.content, "xml")
+            
+            # looking for sub-sitemaps
+            for sitemap_node in soup.find_all("sitemap"):
+                loc = sitemap_node.find("loc")
+                if loc and loc.text:
+                    sitemaps_to_process.append(loc.text.strip())
+
+            # extracting actual page urls
+            for url_node in soup.find_all("url"):
+                if len(page_urls) >= max_pages:
+                    break
+                loc = url_node.find("loc")
+                if loc and loc.text:
+                    url = loc.text.strip()
+                    if urlparse(url).netloc == domain and url not in page_urls:
+                        page_urls.append(url)
+        except Exception:
             continue
 
-        # Extract content cleanly once
-        page_data = extract(html, url)
-        pages.append(page_data)
-        print(f"[{len(pages)}/{max_pages}] Scraped: {url}")
+    print(f"found {len(page_urls)} URLs, starting extraction...")
 
-        # Find internal links to continue crawling
-        soup = BeautifulSoup(html, "html.parser")
-        for a in soup.select("a[href]"):
-            raw_href = a.get("href", "").strip()
-            link = urljoin(url, raw_href).split("#")[0].rstrip("/")
-            parsed = urlparse(link)
-
-            if parsed.netloc == domain and link not in seen:
-                if not any(parsed.path.lower().endswith(ext) for ext in ignored_exts):
-                    queue.append(link)
+    # extracting content from the found URLs using our custom parser
+    for i, url in enumerate(page_urls, 1):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            if resp.status_code == 200 and "text/html" in resp.headers.get("Content-Type", ""):
+                page_data = extract(resp.text, url)
+                pages.append(page_data)
+                print(f"[{i}/{len(page_urls)}] scraped: {url}")
+        except Exception as e:
+            print(f"  [DEBUG] failed {url}: {e}")
 
     return pages
 
 def extract(html: str, url: str) -> dict:
-    """Return {"url", "title", "text", "images": [...]} for one page.
-
-    Cleans boilerplate, formats HTML tables into readable text rows,
-    and isolates primary content containers to improve retrieval precision.
-    """
     soup = BeautifulSoup(html, "html.parser")
 
-    # 1. Decompose noisy elements and site furniture
+    # decomposing noisy elements and site furniture
     for tag in soup(
         [
             "script",
@@ -102,7 +103,7 @@ def extract(html: str, url: str) -> dict:
     ):
         tag.decompose()
 
-    # 2. Convert tables into structured text so columns/cells don't get jumbled
+    # formatting tables into structured text so columns/cells don't get jumbled
     for table in soup.select("table"):
         rows = []
         for tr in table.select("tr"):
@@ -111,7 +112,7 @@ def extract(html: str, url: str) -> dict:
                 rows.append(" | ".join(cells))
         table.replace_with("\n" + "\n".join(rows) + "\n")
 
-    # 3. Target the main content container used by WordPress/Astra/Elementor
+    # targeting the main content container cz the rest is noise
     body = (
         soup.select_one(".entry-content")
         or soup.select_one(".post-content")
@@ -123,7 +124,7 @@ def extract(html: str, url: str) -> dict:
         or soup
     )
 
-    # 4. Extract images with absolute URLs and optional captions
+    # collecting image records with absolute URLs and optional captions
     images = []
     for img in soup.select("img"):
         src = img.get("src")
@@ -143,7 +144,7 @@ def extract(html: str, url: str) -> dict:
             }
         )
 
-    # 5. Normalize whitespace across the extracted content
+    # normalizing whitespace across the extracted content
     text = " ".join(body.get_text(" ", strip=True).split())
 
     return {
@@ -157,7 +158,7 @@ def extract(html: str, url: str) -> dict:
 if __name__ == "__main__":
     all_pages = []
     for site in SITES:
-        print(f"Crawling {site}...")
+        print(f"crawling {site}...")
         all_pages.extend(crawl(site))
 
     Path("data").mkdir(exist_ok=True)
@@ -166,4 +167,4 @@ if __name__ == "__main__":
     images = [im for p in all_pages for im in p["images"]]
     Path("data/images.json").write_text(json.dumps(images, indent=1))
 
-    print(f"Done: {len(all_pages)} pages, {len(images)} images")
+    print(f"done: {len(all_pages)} pages, {len(images)} images")

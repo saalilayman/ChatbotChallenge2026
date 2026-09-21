@@ -25,7 +25,7 @@ CHUNK_SIZE, OVERLAP = 800, 100
 # Storing metadata now.
 def detect_metadata(url: str, text: str) -> tuple[str, str]:
     """Extract page_type and year from url or content."""
-    # Detecting year (e.g., 2023, 2024, 2025, 2026)
+    # Detecting year
     match_year = re.search(r"\b(202[0-9])\b", url) or re.search(
         r"\b(202[0-9])\b", text[:300]
     )
