@@ -7,6 +7,8 @@ rewrite.
 from bot.llm import chat
 from bot.store import get_store, query
 
+from concurrent.futures import ThreadPoolExecutor
+
 # --------------------------------------------------------------------
 # The prompt. Workshop 1 block 2 covers what each part is doing.
 # --------------------------------------------------------------------
@@ -88,4 +90,11 @@ def rag_answer_batch(questions: list[str]) -> list[str]:
 
     Whatever you do, answers[i] must be the answer to questions[i].
     """
-    return [rag_answer(q) for q in questions]
+    # return [rag_answer(q) for q in questions]
+
+    # Gives us only a few tierces more so still not worth it. If you can share work across questions, do so.
+
+    get_store()  # Warm up the store before starting threads
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        return list(executor.map(rag_answer, questions))
