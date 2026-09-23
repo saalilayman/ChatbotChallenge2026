@@ -10,19 +10,27 @@ from bot.store import get_store, query
 # --------------------------------------------------------------------
 # The prompt. Workshop 1 block 2 covers what each part is doing.
 # --------------------------------------------------------------------
-SYSTEM_PROMPT = """You answer questions about the Tam Wing Fan Innovation Wing.
+SYSTEM_PROMPT = """You answer factual questions about the Tam Wing Fan Innovation Wing.
+Answer directly from the provided context. Where the context disagrees with what
+you think you know, the context is correct.
 
-Answer only from the context below. Where the context disagrees with
-what you think you know, the context is correct.
+Reply with the answer only. No explanation, no preamble and do NOT say  
+"The context does not specify" or  "My best guess is".
+If the context does not contain the answer, give your best guess anyway. Never reply that you do not know.
 
-Reply with the answer only. No explanation, no preamble. If the question
-asks how many, reply with a number.
+How to interpret the context:
+1. Table Data: HTML tables are formatted with "|" separating columns. When reading a row, carefully map each value back to its exact corresponding column header from the top of the table.
+2. Timelines: If a question specifies a year, extract the fact for that exact year and ignore past/future data.
+3. Specificity: Return the exact names or values requested. For broad technologies, use the industry category. 
 
-If the context does not contain the answer, give your best guess anyway.
-Never reply that you do not know."""
+Output format:
+- Return ONLY the exact short answer. No conversational filler.
+- If asked for a count or capacity, output digits only."""
 
 CONFIG = {
-    "k": 5,   # try 3 to 10, tuned in Workshop 1 block 5
+    "k": 18,
+    "temperature": 0.0,
+    "max_tokens": 128,
 }
 
 
@@ -39,30 +47,36 @@ def retrieve(question: str, k: int = None, where: dict = None) -> list[dict]:
 
 
 def rag_answer(question: str) -> str:
-    """One question in, one answer out.
-
-    Runs once per question with a 30 second budget. Anything expensive
-    belongs in build/, not here.
-    """
-    chunks = retrieve(question)
-
-    # TODO [W2 b4] once this works: decompose compound questions,
-    # TODO retrieve wide then filter, or filter by metadata before
-    # TODO searching.
-
-    context = "\n\n".join(
-        f"[{c['metadata'].get('url', '?')}]\n{c['text']}" for c in chunks
-    )
-
+    """One question in, one answer out."""
+    chunks = retrieve(question) 
+    
+    context_blocks = []
+    seen_texts = set()
+    
+    for c in chunks:
+        body = c['text'].strip()
+        
+        # Deduplicate
+        if body in seen_texts:
+            continue
+        seen_texts.add(body)
+        
+        # Extract metadata
+        src = c['metadata'].get('url', 'document')
+        year = c['metadata'].get('year', 'Unknown')
+        
+        # Format for LLM
+        doc_num = len(context_blocks) + 1
+        context_blocks.append(f"[Document {doc_num} | Year: {year} | Source: {src}]\n{body}")
+        
+    context = "\n\n---\n\n".join(context_blocks)
+    
     reply = chat([
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"},
+        {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}\nAnswer:"},
     ])
-
-    # TODO check the format of what came back: if you asked for a
-    # TODO number, make sure you got one, and strip any stray prose.
+    
     return reply.strip()
-
 
 def rag_answer_batch(questions: list[str]) -> list[str]:
     """Many questions in, the same number of answers out, in order.
