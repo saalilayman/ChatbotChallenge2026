@@ -93,7 +93,6 @@ def rag_answer_batch(questions: list[str]) -> list[str]:
     # return [rag_answer(q) for q in questions]
 
     # Gives us only a few tierces more so still not worth it. If you can share work across questions, do so.
-
     get_store()  # Warm up the store before starting threads
 
     with ThreadPoolExecutor(max_workers=8) as executor:
