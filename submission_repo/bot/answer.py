@@ -25,6 +25,22 @@ CONFIG = {
     "k": 5,   # try 3 to 10, tuned in Workshop 1 block 5
 }
 
+test_questions = ["What time was the robot arm challenge held at?",
+"How many chairs are in the Tam Wing Fan Inno Wing Two?",
+"How many people won the pitch competition on grand challenge engineering, and what award did they win?", 
+"What is club grenade?", 
+"What are the themes for the pitching contest for engineering msc students?",
+"Who was the speaker for the techtalk, and which room was it held in?",
+"How many people visited UNSW Sydney on the study tour?",
+"How many people attended the ASTAR course?",
+"Who were the sponsors for the HKU racing team's (HKUR) racecar?",
+"How many people built a plane as part of the HKU design, build and fly club?",
+]
+
+test_questions_2 = [
+"How many people visited UNSW Sydney on the study tour?",
+"How many people attended the ASTAR course?",
+]
 
 def retrieve(question: str, k: int = None, where: dict = None) -> list[dict]:
     """Return the k chunks most relevant to the question.
@@ -75,3 +91,6 @@ def rag_answer_batch(questions: list[str]) -> list[str]:
     Whatever you do, answers[i] must be the answer to questions[i].
     """
     return [rag_answer(q) for q in questions]
+
+
+print(rag_answer_batch(test_questions_2))
