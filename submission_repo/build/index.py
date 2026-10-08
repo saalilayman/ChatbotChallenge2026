@@ -13,7 +13,6 @@ import re
 # imported sys to resolve the bot issue
 import sys
 
-# Add the project root (the folder above /build) to Python's module search path
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))

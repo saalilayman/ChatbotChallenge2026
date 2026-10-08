@@ -8,6 +8,7 @@ venv/
 
 .build/index_backup.py
 .build/scrape_backup.py
+.build/images_backup.py
 .build/test.py
 
 .data/_tmp_image.jpg

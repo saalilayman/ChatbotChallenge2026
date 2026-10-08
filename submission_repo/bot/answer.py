@@ -4,6 +4,14 @@ Two functions must exist with these exact names and signatures. Every
 other line in this file, and every file under build/, is yours to
 rewrite.
 """
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from bot.llm import chat
 from bot.store import get_store, query
 
@@ -16,24 +24,44 @@ SYSTEM_PROMPT = """You answer factual questions about the Tam Wing Fan Innovatio
 Answer directly from the provided context. Where the context disagrees with what
 you think you know, the context is correct.
 
-Reply with the answer only. No explanation, no preamble and do NOT say  
-"The context does not specify" or  "My best guess is".
+Reply with the answer only. No explanation, no preamble and do NOT say "The context does not specify" or  "My best guess is".
 If the context does not contain the answer, give your best guess anyway. Never reply that you do not know.
 
 How to interpret the context:
 1. Table Data: HTML tables are formatted with "|" separating columns. When reading a row, carefully map each value back to its exact corresponding column header from the top of the table.
 2. Timelines: If a question specifies a year, extract the fact for that exact year and ignore past/future data.
 3. Specificity: Return the exact names or values requested. For broad technologies, use the industry category. 
+4. Exhaustive Extraction: If asked for items, read the ENTIRE context chunk and list EVERY matching item. Never stop at the first partial match.
+5. Multi-part Questions: If a question asks for multiple things (e.g., a number AND an object), ensure your answer addresses all parts.
 
 Output format:
-- Return ONLY the exact short answer. No conversational filler.
-- If asked for a count or capacity, output digits only."""
+- Reply with ONLY the final concise answer or comma-separated list. No conversational filler.
+- Include modifiers like "at least" or "about" if present in the text.
+"""
 
 CONFIG = {
-    "k": 18,
+    "k": 5,
     "temperature": 0.0,
-    "max_tokens": 128,
+    "max_tokens": 256,
 }
+
+test_questions = [
+"What time was the robot arm challenge held at?",
+"How many chairs are in the Tam Wing Fan Inno Wing Two?",
+"How many people won the pitch competition on grand challenge engineering, and what award did they win?", 
+"What is club grenade?", 
+"What are the themes for the pitching contest for engineering msc students?",
+"Who was the speaker for the techtalk, and which room was it held in?",
+"How many people visited UNSW Sydney on the study tour?",
+"How many people attended the ASTAR course?",
+"Who were the sponsors for the HKU racing team's (HKUR) racecar?",
+"How many people built a plane as part of the HKU design, build and fly club?",
+]
+
+test_questions_2 = [
+"How many people visited UNSW Sydney on the study tour?",
+"How many people attended the ASTAR course?",
+]
 
 
 def retrieve(question: str, k: int = None, where: dict = None) -> list[dict]:
@@ -97,3 +125,12 @@ def rag_answer_batch(questions: list[str]) -> list[str]:
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         return list(executor.map(rag_answer, questions))
+
+
+answers = rag_answer_batch(test_questions)
+
+print("\n RAG PIPELINE EVALUATION (am going crazy hhhh)")
+for i, (q, a) in enumerate(zip(test_questions, answers), 1):
+    print(f"\n[Q{i}]: {q}")
+    print(f"[Ans]: {a}")
+    print("-" * 40)
