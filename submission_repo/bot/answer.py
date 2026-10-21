@@ -10,22 +10,33 @@ from bot.store import get_store, query
 # --------------------------------------------------------------------
 # The prompt. Workshop 1 block 2 covers what each part is doing.
 # --------------------------------------------------------------------
-SYSTEM_PROMPT = """You answer questions about the Tam Wing Fan Innovation Wing.
+SYSTEM_PROMPT = """You answer factual questions about the Tam Wing Fan Innovation Wing.
+Answer directly from the provided context. Where the context disagrees with what
+you think you know, the context is correct.
 
-Answer only from the context below. Where the context disagrees with
-what you think you know, the context is correct.
+Reply with the answer only. No explanation, no preamble and do NOT say "The context does not specify" or  "My best guess is".
+If the context does not contain the answer, give your best guess anyway. Never reply that you do not know.
 
-Reply with the answer only. No explanation, no preamble. If the question
-asks how many, reply with a number.
+How to interpret the context:
+Table Data: HTML tables are formatted with "|" separating columns. When reading a row, carefully map each value back to its exact corresponding column header from the top of the table.
+Timelines: If a question specifies a year, extract the fact for that exact year and ignore past/future data.
+Specificity: Return the exact names or values requested. For broad technologies, use the industry category.
+Exhaustive Extraction: If asked for items, read the ENTIRE context chunk and list EVERY matching item. Never stop at the first partial match.
+Multi-part Questions: If a question asks for multiple things (e.g., a number AND an object), ensure your answer addresses all parts.
 
-If the context does not contain the answer, give your best guess anyway.
-Never reply that you do not know."""
+Output format:
+Reply with ONLY the final concise answer or comma-separated list. No conversational filler.
+Include modifiers like "at least" or "about" if present in the text.
+"""
 
 CONFIG = {
-    "k": 5,   # try 3 to 10, tuned in Workshop 1 block 5
+    "k": 5,
+    "temperature": 0.0,
+    "max_tokens": 256,
 }
 
-test_questions = ["What time was the robot arm challenge held at?",
+test_questions = [
+"What time was the robot arm challenge held at?",
 "How many chairs are in the Tam Wing Fan Inno Wing Two?",
 "How many people won the pitch competition on grand challenge engineering, and what award did they win?", 
 "What is club grenade?", 
@@ -93,4 +104,4 @@ def rag_answer_batch(questions: list[str]) -> list[str]:
     return [rag_answer(q) for q in questions]
 
 
-print(rag_answer_batch(test_questions_2))
+print(rag_answer(test_questions[8]))

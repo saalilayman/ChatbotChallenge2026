@@ -13,8 +13,17 @@ from pathlib import Path
 
 import requests
 
+import re
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+
 from bot.llm import describe_image
 from bot.store import add_to_store, get_store
+
 
 DESCRIPTION_PROMPT = """
 Describe the image in detail, listing in this exact order:
@@ -31,7 +40,6 @@ Do not add closing remarks or notes after section 7. Keep the whole description 
 """
 
 
-
 CACHE_PATH = Path("data/descriptions.json")
 
 
@@ -43,19 +51,59 @@ def describe_all(images: list[dict]) -> dict:
     """
     cache = json.loads(CACHE_PATH.read_text()) if CACHE_PATH.exists() else {}
 
+    # An aggressive whitelist approach because the LLM is expensive and slow. Only describe images that are likely to be useful.
+    filtered_images = []
     for im in images:
+        src = im["src"].lower()
+
+        clean_src = src.split('?')[0] # To chop off anything after a '?'
+        if not clean_src.endswith((".png", ".jpg", ".jpeg", ".webp", ".avif")):
+            continue
+
+        if any(junk in src for junk in ["logo", "icon", "thumb", "avatar", "button", "bg"]):
+            continue
+ 
+        # if any(str(year) in src for year in range(2010, 2019)):
+        #     continue
+
+        filtered_images.append(im)
+
+    print(f"Filtered list from {len(images)} raw links down to {len(filtered_images)} viable images.")
+
+    for im in filtered_images:
         src = im["src"]
+
         if src in cache:
             continue
         try:
+        #     ext = Path(src.split('?')[0]).suffix
+        #     if not ext:
+        #         ext = ".jpg" # Fallback just in case
+                
+        #     tmp = Path(f"data/_tmp_image{ext}")
+
             tmp = Path("data/_tmp_image")
-            tmp.write_bytes(requests.get(src, timeout=30).content)
-            cache[src] = describe_image(str(tmp), DESCRIPTION_PROMPT)
+            
+            print(f"Downloading: {src[:50]}...")
+            
+            req = requests.get(src, timeout=30)
+            req.raise_for_status()
+            tmp.write_bytes(req.content)
+
+            print("Describing with LLM...")
+            result = describe_image(str(tmp), DESCRIPTION_PROMPT)
+            
+            # Catch empty strings before they ruin the cache
+            if not result.strip():
+                print(f"WARNING: LLM returned empty string for {src}")
+            else:
+                cache[src] = result
+                CACHE_PATH.parent.mkdir(exist_ok=True)
+                CACHE_PATH.write_text(json.dumps(cache, indent=1))
+                print("Done and saved to disk!")
         except Exception as exc:
             print("failed:", src[:70], exc)
 
-    CACHE_PATH.parent.mkdir(exist_ok=True)
-    CACHE_PATH.write_text(json.dumps(cache, indent=1))
     print(f"{len(cache)} descriptions cached")
     return cache
 
@@ -119,5 +167,5 @@ if __name__ == "__main__":
  {"src":"https://innoacademy.engg.hku.hk/wp-content/uploads/2023/02/IMG_0818-scaled.jpg"},
     ]
     
-    descriptions = describe_all(images_test_2)
-    index_descriptions(descriptions, images_test_2)
+    descriptions = describe_all(images)
+    index_descriptions(descriptions, images)
